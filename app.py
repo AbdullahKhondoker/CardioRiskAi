@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import streamlit as st
 
-# ── Page config ───────────────────────────────────────────────────
 st.set_page_config(
     page_title="CardioRisk AI",
     page_icon="🫀",
@@ -11,14 +10,12 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── Custom CSS ────────────────────────────────────────────────────
 st.markdown("""
 <style>
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 
     section[data-testid="stSidebar"] {
         background: linear-gradient(160deg, #0f172a 0%, #1e293b 100%);
-        color: white;
     }
     section[data-testid="stSidebar"] * { color: #e2e8f0 !important; }
     section[data-testid="stSidebar"] h1,
@@ -124,7 +121,6 @@ scaler, selected_features, feature_order, iqr_bounds, model = load_artifacts()
 train_means = {feat: scaler.mean_[i] for i, feat in enumerate(feature_order)}
 
 
-# ── Feature engineering ───────────────────────────────────────────
 def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     df["Troponin_log"]   = np.log1p(df["Troponin"])
@@ -182,99 +178,6 @@ def risk_label(p: float):
         return "Moderate Risk", "warning", "🟡"
     else:
         return "Low Risk",      "success", "🟢"
-
-
-# ── Radial gauge SVG ──────────────────────────────────────────────
-def radial_gauge(probability: float, label: str) -> str:
-    pct    = probability * 100
-    radius = 80
-    cx, cy = 110, 110
-    pi     = 3.14159265
-    circumf = pi * radius   # semicircle arc length
-
-    if probability >= 0.70:
-        arc_color   = "#ef4444"
-        glow        = "rgba(239,68,68,0.15)"
-        badge_bg    = "#fef2f2"
-        badge_text  = "#dc2626"
-    elif probability >= 0.40:
-        arc_color   = "#f59e0b"
-        glow        = "rgba(245,158,11,0.15)"
-        badge_bg    = "#fffbeb"
-        badge_text  = "#d97706"
-    else:
-        arc_color   = "#22c55e"
-        glow        = "rgba(34,197,94,0.15)"
-        badge_bg    = "#f0fdf4"
-        badge_text  = "#16a34a"
-
-    filled = circumf * probability
-    empty  = circumf * (1 - probability)
-
-    return f"""
-    <div style="display:flex;justify-content:center;align-items:center;padding:8px 0;">
-      <svg width="220" height="150" viewBox="0 0 220 150"
-           xmlns="http://www.w3.org/2000/svg">
-
-        <!-- soft glow ring -->
-        <circle cx="{cx}" cy="{cy}" r="95" fill="{glow}"/>
-
-        <!-- grey track -->
-        <path d="M {cx-radius} {cy} A {radius} {radius} 0 0 1 {cx+radius} {cy}"
-              fill="none" stroke="#e5e7eb" stroke-width="16"
-              stroke-linecap="round"/>
-
-        <!-- coloured fill arc (rotated 180 to start from left) -->
-        <path d="M {cx-radius} {cy} A {radius} {radius} 0 0 1 {cx+radius} {cy}"
-              fill="none" stroke="{arc_color}" stroke-width="16"
-              stroke-linecap="round"
-              stroke-dasharray="{filled:.2f} {empty:.2f}"
-              transform="rotate(180 {cx} {cy})"/>
-
-        <!-- tick marks at 0 25 50 75 100% -->
-        <line x1="{cx-radius-4}" y1="{cy}" x2="{cx-radius+4}" y2="{cy}"
-              stroke="#9ca3af" stroke-width="1.5"/>
-        <line x1="{cx+radius-4}" y1="{cy}" x2="{cx+radius+4}" y2="{cy}"
-              stroke="#9ca3af" stroke-width="1.5"/>
-        <line x1="{cx}" y1="{cy-radius-4}" x2="{cx}" y2="{cy-radius+4}"
-              stroke="#9ca3af" stroke-width="1.5"/>
-
-        <!-- percentage label -->
-        <text x="{cx}" y="{cy - 12}"
-              text-anchor="middle"
-              font-family="Inter,sans-serif"
-              font-size="32" font-weight="800"
-              fill="#0f172a">{pct:.1f}%</text>
-
-        <!-- sub label -->
-        <text x="{cx}" y="{cy + 12}"
-              text-anchor="middle"
-              font-family="Inter,sans-serif"
-              font-size="11" font-weight="500"
-              fill="#6b7280">Disease Probability</text>
-
-        <!-- risk badge pill -->
-        <rect x="{cx-46}" y="{cy+24}" width="92" height="22"
-              rx="11" fill="{badge_bg}" stroke="{arc_color}" stroke-width="1"/>
-        <text x="{cx}" y="{cy+39}"
-              text-anchor="middle"
-              font-family="Inter,sans-serif"
-              font-size="11" font-weight="700"
-              fill="{badge_text}">{label}</text>
-
-        <!-- edge labels -->
-        <text x="{cx-radius-8}" y="{cy+18}"
-              text-anchor="end"
-              font-family="Inter,sans-serif"
-              font-size="10" fill="#9ca3af">0%</text>
-        <text x="{cx+radius+8}" y="{cy+18}"
-              text-anchor="start"
-              font-family="Inter,sans-serif"
-              font-size="10" fill="#9ca3af">100%</text>
-
-      </svg>
-    </div>
-    """
 
 
 # ── Sidebar ───────────────────────────────────────────────────────
@@ -363,7 +266,6 @@ with tab1:
                                 min_value=0.0, max_value=100.0,
                                 value=1.0, step=0.1)
     with c8:
-        # Fixed: min corrected to 0.000 based on dataset minimum (0.001 ng/mL)
         troponin = st.number_input(
             "Troponin (ng/mL)",
             min_value=0.000,
@@ -401,7 +303,7 @@ with tab1:
             st.markdown("<div class='section-title'>Prediction Result</div>",
                         unsafe_allow_html=True)
 
-            r1c, r2c, r3c = st.columns([1.1, 1, 1])
+            r1c, r2c, r3c = st.columns([1.2, 1, 1])
 
             # Left — diagnosis banner
             with r1c:
@@ -432,19 +334,15 @@ with tab1:
                     </div>
                     """, unsafe_allow_html=True)
 
-            # Centre — radial gauge
+            # Centre — risk level + probability bar using Streamlit native
             with r2c:
-                st.markdown(radial_gauge(p, label), unsafe_allow_html=True)
-
-            # Right — supporting cards
-            with r3c:
                 st.markdown(f"""
                 <div class='metric-card {card_cls}'>
                     <div style='font-size:12px;color:#6b7280;
                                 font-weight:600;text-transform:uppercase'>
                         Risk Level
                     </div>
-                    <div style='font-size:24px;font-weight:800;
+                    <div style='font-size:28px;font-weight:800;
                                 margin-top:4px;color:#0f172a'>
                         {icon} {label}
                     </div>
@@ -455,13 +353,29 @@ with tab1:
                 <div class='metric-card'>
                     <div style='font-size:12px;color:#6b7280;
                                 font-weight:600;text-transform:uppercase'>
+                        Disease Probability
+                    </div>
+                    <div style='font-size:32px;font-weight:800;
+                                color:#0f172a;margin-top:4px'>
+                        {pct:.1f}%
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+                st.progress(p)
+
+            # Right — confidence + prediction
+            with r3c:
+                st.markdown(f"""
+                <div class='metric-card'>
+                    <div style='font-size:12px;color:#6b7280;
+                                font-weight:600;text-transform:uppercase'>
                         Model Confidence
                     </div>
-                    <div style='font-size:26px;font-weight:800;
+                    <div style='font-size:28px;font-weight:800;
                                 color:#0f172a;margin-top:4px'>
                         {max(pct, 100 - pct):.1f}%
                     </div>
-                    <div style='color:#6b7280;font-size:12px;margin-top:2px'>
+                    <div style='color:#6b7280;font-size:13px;margin-top:4px'>
                         Calibrated via Platt Scaling
                     </div>
                 </div>
@@ -477,7 +391,7 @@ with tab1:
                                 color:#0f172a;margin-top:4px'>
                         {"Positive 🔴" if y_pred[0] == 1 else "Negative 🟢"}
                     </div>
-                    <div style='color:#6b7280;font-size:12px;margin-top:2px'>
+                    <div style='color:#6b7280;font-size:13px;margin-top:4px'>
                         Decision threshold: 0.50
                     </div>
                 </div>
