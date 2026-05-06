@@ -200,7 +200,6 @@ with st.sidebar:
     for f in selected_features:
         st.markdown(f"- `{f}`")
     st.markdown("---")
-    st.caption("⚠️ For research use only. Not a substitute for clinical diagnosis.")
 
 
 # ── Header ────────────────────────────────────────────────────────
