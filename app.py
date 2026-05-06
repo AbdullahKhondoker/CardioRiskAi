@@ -14,10 +14,8 @@ st.set_page_config(
 # ── Custom CSS ────────────────────────────────────────────────────
 st.markdown("""
 <style>
-    /* Global font */
     html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
 
-    /* Sidebar */
     section[data-testid="stSidebar"] {
         background: linear-gradient(160deg, #0f172a 0%, #1e293b 100%);
         color: white;
@@ -27,10 +25,8 @@ st.markdown("""
     section[data-testid="stSidebar"] h2,
     section[data-testid="stSidebar"] h3 { color: #f8fafc !important; }
 
-    /* Main background */
     .main { background-color: #f8fafc; }
 
-    /* Metric cards */
     .metric-card {
         background: white;
         border-radius: 16px;
@@ -43,7 +39,6 @@ st.markdown("""
     .metric-card.success { border-left-color: #22c55e; }
     .metric-card.warning { border-left-color: #f59e0b; }
 
-    /* Result banner */
     .result-positive {
         background: linear-gradient(135deg, #fef2f2, #fee2e2);
         border: 1px solid #fca5a5;
@@ -59,10 +54,8 @@ st.markdown("""
         text-align: center;
     }
 
-    /* Input labels */
     label { font-weight: 500 !important; color: #374151 !important; }
 
-    /* Section headers */
     .section-title {
         font-size: 13px;
         font-weight: 700;
@@ -74,7 +67,6 @@ st.markdown("""
         border-bottom: 1px solid #e5e7eb;
     }
 
-    /* Tab styling */
     .stTabs [data-baseweb="tab-list"] {
         background: white;
         border-radius: 12px;
@@ -92,7 +84,6 @@ st.markdown("""
         color: white !important;
     }
 
-    /* Button */
     .stButton > button {
         background: linear-gradient(135deg, #3b82f6, #2563eb);
         color: white;
@@ -110,32 +101,6 @@ st.markdown("""
         box-shadow: 0 4px 16px rgba(59,130,246,0.45);
     }
 
-    /* Probability bar container */
-    .prob-bar-wrap {
-        background: #e5e7eb;
-        border-radius: 999px;
-        height: 12px;
-        width: 100%;
-        overflow: hidden;
-        margin-top: 6px;
-    }
-    .prob-bar-fill-high {
-        height: 100%;
-        border-radius: 999px;
-        background: linear-gradient(90deg, #f59e0b, #ef4444);
-    }
-    .prob-bar-fill-low {
-        height: 100%;
-        border-radius: 999px;
-        background: linear-gradient(90deg, #22c55e, #16a34a);
-    }
-    .prob-bar-fill-mid {
-        height: 100%;
-        border-radius: 999px;
-        background: linear-gradient(90deg, #f59e0b, #ea580c);
-    }
-
-    /* Hide Streamlit branding */
     #MainMenu { visibility: hidden; }
     footer     { visibility: hidden; }
 </style>
@@ -149,17 +114,17 @@ def load_artifacts():
         arts = pickle.load(f)
     with open("xgb_platt_model.pkl", "rb") as f:
         model = pickle.load(f)
-    scaler           = arts["scaler"]
+    scaler            = arts["scaler"]
     selected_features = arts["selected_features"]
-    feature_order    = arts["feature_order"]
-    iqr_bounds       = arts["iqr_bounds"]
+    feature_order     = arts["feature_order"]
+    iqr_bounds        = arts["iqr_bounds"]
     return scaler, selected_features, feature_order, iqr_bounds, model
 
 scaler, selected_features, feature_order, iqr_bounds, model = load_artifacts()
 train_means = {feat: scaler.mean_[i] for i, feat in enumerate(feature_order)}
 
 
-# ── Feature engineering (mirrors Cell 3) ─────────────────────────
+# ── Feature engineering ───────────────────────────────────────────
 def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     df["Troponin_log"]   = np.log1p(df["Troponin"])
@@ -192,8 +157,8 @@ def align_and_impute(df_raw: pd.DataFrame) -> pd.DataFrame:
 
 
 def preprocess_df(df_raw: pd.DataFrame) -> pd.DataFrame:
-    X        = align_and_impute(df_raw)
-    X_scaled = scaler.transform(X)
+    X           = align_and_impute(df_raw)
+    X_scaled    = scaler.transform(X)
     X_scaled_df = pd.DataFrame(X_scaled, columns=feature_order, index=df_raw.index)
     return X_scaled_df[selected_features]
 
@@ -212,11 +177,104 @@ def predict_df(df_raw: pd.DataFrame):
 
 def risk_label(p: float):
     if p >= 0.70:
-        return "High Risk", "danger",  "🔴"
+        return "High Risk",     "danger",  "🔴"
     elif p >= 0.40:
         return "Moderate Risk", "warning", "🟡"
     else:
-        return "Low Risk", "success", "🟢"
+        return "Low Risk",      "success", "🟢"
+
+
+# ── Radial gauge SVG ──────────────────────────────────────────────
+def radial_gauge(probability: float, label: str) -> str:
+    pct    = probability * 100
+    radius = 80
+    cx, cy = 110, 110
+    pi     = 3.14159265
+    circumf = pi * radius   # semicircle arc length
+
+    if probability >= 0.70:
+        arc_color   = "#ef4444"
+        glow        = "rgba(239,68,68,0.15)"
+        badge_bg    = "#fef2f2"
+        badge_text  = "#dc2626"
+    elif probability >= 0.40:
+        arc_color   = "#f59e0b"
+        glow        = "rgba(245,158,11,0.15)"
+        badge_bg    = "#fffbeb"
+        badge_text  = "#d97706"
+    else:
+        arc_color   = "#22c55e"
+        glow        = "rgba(34,197,94,0.15)"
+        badge_bg    = "#f0fdf4"
+        badge_text  = "#16a34a"
+
+    filled = circumf * probability
+    empty  = circumf * (1 - probability)
+
+    return f"""
+    <div style="display:flex;justify-content:center;align-items:center;padding:8px 0;">
+      <svg width="220" height="150" viewBox="0 0 220 150"
+           xmlns="http://www.w3.org/2000/svg">
+
+        <!-- soft glow ring -->
+        <circle cx="{cx}" cy="{cy}" r="95" fill="{glow}"/>
+
+        <!-- grey track -->
+        <path d="M {cx-radius} {cy} A {radius} {radius} 0 0 1 {cx+radius} {cy}"
+              fill="none" stroke="#e5e7eb" stroke-width="16"
+              stroke-linecap="round"/>
+
+        <!-- coloured fill arc (rotated 180 to start from left) -->
+        <path d="M {cx-radius} {cy} A {radius} {radius} 0 0 1 {cx+radius} {cy}"
+              fill="none" stroke="{arc_color}" stroke-width="16"
+              stroke-linecap="round"
+              stroke-dasharray="{filled:.2f} {empty:.2f}"
+              transform="rotate(180 {cx} {cy})"/>
+
+        <!-- tick marks at 0 25 50 75 100% -->
+        <line x1="{cx-radius-4}" y1="{cy}" x2="{cx-radius+4}" y2="{cy}"
+              stroke="#9ca3af" stroke-width="1.5"/>
+        <line x1="{cx+radius-4}" y1="{cy}" x2="{cx+radius+4}" y2="{cy}"
+              stroke="#9ca3af" stroke-width="1.5"/>
+        <line x1="{cx}" y1="{cy-radius-4}" x2="{cx}" y2="{cy-radius+4}"
+              stroke="#9ca3af" stroke-width="1.5"/>
+
+        <!-- percentage label -->
+        <text x="{cx}" y="{cy - 12}"
+              text-anchor="middle"
+              font-family="Inter,sans-serif"
+              font-size="32" font-weight="800"
+              fill="#0f172a">{pct:.1f}%</text>
+
+        <!-- sub label -->
+        <text x="{cx}" y="{cy + 12}"
+              text-anchor="middle"
+              font-family="Inter,sans-serif"
+              font-size="11" font-weight="500"
+              fill="#6b7280">Disease Probability</text>
+
+        <!-- risk badge pill -->
+        <rect x="{cx-46}" y="{cy+24}" width="92" height="22"
+              rx="11" fill="{badge_bg}" stroke="{arc_color}" stroke-width="1"/>
+        <text x="{cx}" y="{cy+39}"
+              text-anchor="middle"
+              font-family="Inter,sans-serif"
+              font-size="11" font-weight="700"
+              fill="{badge_text}">{label}</text>
+
+        <!-- edge labels -->
+        <text x="{cx-radius-8}" y="{cy+18}"
+              text-anchor="end"
+              font-family="Inter,sans-serif"
+              font-size="10" fill="#9ca3af">0%</text>
+        <text x="{cx+radius+8}" y="{cy+18}"
+              text-anchor="start"
+              font-family="Inter,sans-serif"
+              font-size="10" fill="#9ca3af">100%</text>
+
+      </svg>
+    </div>
+    """
 
 
 # ── Sidebar ───────────────────────────────────────────────────────
@@ -244,11 +302,11 @@ with st.sidebar:
 
 # ── Header ────────────────────────────────────────────────────────
 st.markdown("""
-<div style='padding: 28px 0 12px 0'>
-    <h1 style='margin:0; font-size:32px; font-weight:800; color:#0f172a'>
+<div style='padding:28px 0 12px 0'>
+    <h1 style='margin:0;font-size:32px;font-weight:800;color:#0f172a'>
         🫀 CardioRisk AI
     </h1>
-    <p style='margin:4px 0 0 0; color:#64748b; font-size:16px'>
+    <p style='margin:4px 0 0 0;color:#64748b;font-size:16px'>
         Heart Disease Risk Prediction — Powered by Tuned XGBoost with Platt Calibration
     </p>
 </div>
@@ -256,7 +314,6 @@ st.markdown("""
 
 st.markdown("---")
 
-# ── Tabs ──────────────────────────────────────────────────────────
 tab1, tab2 = st.tabs(["🧍 Single Patient Prediction", "🗂️ Batch Prediction (CSV)"])
 
 
@@ -268,10 +325,9 @@ with tab1:
     st.markdown("<div class='section-title'>Patient Demographics</div>",
                 unsafe_allow_html=True)
     c1, c2, c3 = st.columns(3)
-
     with c1:
-        age = st.number_input("Age (years)", min_value=1.0, max_value=120.0,
-                               value=45.0, step=1.0)
+        age = st.number_input("Age (years)", min_value=1.0,
+                               max_value=120.0, value=45.0, step=1.0)
     with c2:
         gender_label = st.radio("Gender", ["Female", "Male"],
                                  index=1, horizontal=True)
@@ -292,7 +348,6 @@ with tab1:
         dbp = st.number_input("Diastolic BP (mmHg)",
                                min_value=40.0, max_value=150.0,
                                value=80.0, step=1.0)
-
     if sbp < dbp:
         st.warning("⚠️ Systolic BP should be greater than Diastolic BP.")
 
@@ -308,9 +363,15 @@ with tab1:
                                 min_value=0.0, max_value=100.0,
                                 value=1.0, step=0.1)
     with c8:
-        troponin = st.number_input("Troponin (ng/mL)",
-                                    min_value=0.0, max_value=50.0,
-                                    value=0.01, step=0.01)
+        # Fixed: min corrected to 0.000 based on dataset minimum (0.001 ng/mL)
+        troponin = st.number_input(
+            "Troponin (ng/mL)",
+            min_value=0.000,
+            max_value=50.0,
+            value=0.001,
+            step=0.001,
+            format="%.3f"
+        )
 
     st.markdown("<br>", unsafe_allow_html=True)
     _, btn_col, _ = st.columns([2, 1, 2])
@@ -328,61 +389,63 @@ with tab1:
             "CK-MB"                    : ckmb,
             "Troponin"                 : troponin,
         }
-
         df_single = pd.DataFrame([single_input])
 
         try:
             y_pred, proba = predict_df(df_single)
-            p = float(proba[0])
+            p             = float(proba[0])
             label, card_cls, icon = risk_label(p)
-            pct = p * 100
-            bar_cls = ("prob-bar-fill-high" if p >= 0.70
-                       else "prob-bar-fill-mid" if p >= 0.40
-                       else "prob-bar-fill-low")
+            pct           = p * 100
 
             st.markdown("---")
             st.markdown("<div class='section-title'>Prediction Result</div>",
                         unsafe_allow_html=True)
 
-            r1c, r2c, r3c = st.columns([1.2, 1, 1])
+            r1c, r2c, r3c = st.columns([1.1, 1, 1])
 
+            # Left — diagnosis banner
             with r1c:
                 if y_pred[0] == 1:
-                    st.markdown(f"""
+                    st.markdown("""
                     <div class='result-positive'>
                         <div style='font-size:48px'>🚨</div>
-                        <div style='font-size:22px; font-weight:800;
-                                    color:#dc2626; margin-top:8px'>
+                        <div style='font-size:22px;font-weight:800;
+                                    color:#dc2626;margin-top:8px'>
                             Heart Disease Detected
                         </div>
-                        <div style='color:#991b1b; margin-top:4px; font-size:14px'>
+                        <div style='color:#991b1b;margin-top:4px;font-size:14px'>
                             Please seek immediate clinical evaluation
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
                 else:
-                    st.markdown(f"""
+                    st.markdown("""
                     <div class='result-negative'>
                         <div style='font-size:48px'>✅</div>
-                        <div style='font-size:22px; font-weight:800;
-                                    color:#16a34a; margin-top:8px'>
+                        <div style='font-size:22px;font-weight:800;
+                                    color:#16a34a;margin-top:8px'>
                             No Heart Disease Detected
                         </div>
-                        <div style='color:#166534; margin-top:4px; font-size:14px'>
+                        <div style='color:#166534;margin-top:4px;font-size:14px'>
                             Continue routine monitoring
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
 
+            # Centre — radial gauge
             with r2c:
+                st.markdown(radial_gauge(p, label), unsafe_allow_html=True)
+
+            # Right — supporting cards
+            with r3c:
                 st.markdown(f"""
                 <div class='metric-card {card_cls}'>
-                    <div style='font-size:12px; color:#6b7280;
-                                font-weight:600; text-transform:uppercase'>
+                    <div style='font-size:12px;color:#6b7280;
+                                font-weight:600;text-transform:uppercase'>
                         Risk Level
                     </div>
-                    <div style='font-size:28px; font-weight:800;
-                                margin-top:4px; color:#0f172a'>
+                    <div style='font-size:24px;font-weight:800;
+                                margin-top:4px;color:#0f172a'>
                         {icon} {label}
                     </div>
                 </div>
@@ -390,32 +453,15 @@ with tab1:
 
                 st.markdown(f"""
                 <div class='metric-card'>
-                    <div style='font-size:12px; color:#6b7280;
-                                font-weight:600; text-transform:uppercase'>
-                        Disease Probability
-                    </div>
-                    <div style='font-size:32px; font-weight:800;
-                                color:#0f172a; margin-top:4px'>
-                        {pct:.1f}%
-                    </div>
-                    <div class='prob-bar-wrap'>
-                        <div class='{bar_cls}' style='width:{pct:.1f}%'></div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-
-            with r3c:
-                st.markdown(f"""
-                <div class='metric-card'>
-                    <div style='font-size:12px; color:#6b7280;
-                                font-weight:600; text-transform:uppercase'>
+                    <div style='font-size:12px;color:#6b7280;
+                                font-weight:600;text-transform:uppercase'>
                         Model Confidence
                     </div>
-                    <div style='font-size:28px; font-weight:800;
-                                color:#0f172a; margin-top:4px'>
-                        {max(pct, 100-pct):.1f}%
+                    <div style='font-size:26px;font-weight:800;
+                                color:#0f172a;margin-top:4px'>
+                        {max(pct, 100 - pct):.1f}%
                     </div>
-                    <div style='color:#6b7280; font-size:13px; margin-top:4px'>
+                    <div style='color:#6b7280;font-size:12px;margin-top:2px'>
                         Calibrated via Platt Scaling
                     </div>
                 </div>
@@ -423,16 +469,16 @@ with tab1:
 
                 st.markdown(f"""
                 <div class='metric-card'>
-                    <div style='font-size:12px; color:#6b7280;
-                                font-weight:600; text-transform:uppercase'>
-                        Prediction
+                    <div style='font-size:12px;color:#6b7280;
+                                font-weight:600;text-transform:uppercase'>
+                        Binary Prediction
                     </div>
-                    <div style='font-size:20px; font-weight:700;
-                                color:#0f172a; margin-top:4px'>
-                        {"Positive 🔴" if y_pred[0]==1 else "Negative 🟢"}
+                    <div style='font-size:20px;font-weight:700;
+                                color:#0f172a;margin-top:4px'>
+                        {"Positive 🔴" if y_pred[0] == 1 else "Negative 🟢"}
                     </div>
-                    <div style='color:#6b7280; font-size:13px; margin-top:4px'>
-                        Threshold: 0.50
+                    <div style='color:#6b7280;font-size:12px;margin-top:2px'>
+                        Decision threshold: 0.50
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
@@ -447,10 +493,10 @@ with tab1:
 with tab2:
     st.markdown("""
     <div class='metric-card'>
-        <div style='font-weight:700; font-size:15px; color:#0f172a'>
+        <div style='font-weight:700;font-size:15px;color:#0f172a'>
             📋 CSV Format Requirements
         </div>
-        <div style='color:#64748b; font-size:13px; margin-top:6px'>
+        <div style='color:#64748b;font-size:13px;margin-top:6px'>
             Your CSV must include the following columns:
             <code>Age, Gender, Heart rate, Systolic blood pressure,
             Diastolic blood pressure, Blood sugar, CK-MB, Troponin</code>
@@ -460,7 +506,6 @@ with tab2:
 
     file = st.file_uploader("Upload your CSV file", type=["csv"],
                              help="Max file size: 200MB")
-
     if file is not None:
         try:
             df_raw = pd.read_csv(file)
@@ -471,10 +516,10 @@ with tab2:
                 y_pred, proba = predict_df(df_raw)
 
             out = df_raw.copy()
-            out["Prediction"]         = ["Heart Disease" if p == 1
-                                          else "No Heart Disease" for p in y_pred]
+            out["Prediction"]           = ["Heart Disease" if p == 1
+                                            else "No Heart Disease" for p in y_pred]
             out["Risk Probability (%)"] = (proba * 100).round(2)
-            out["Risk Level"]          = [risk_label(p)[0] for p in proba]
+            out["Risk Level"]           = [risk_label(p)[0] for p in proba]
 
             st.markdown("---")
             st.markdown("### Results")
@@ -484,11 +529,11 @@ with tab2:
             negative = total - positive
 
             m1, m2, m3 = st.columns(3)
-            m1.metric("Total Patients", f"{total:,}")
+            m1.metric("Total Patients",         f"{total:,}")
             m2.metric("Heart Disease Detected", f"{positive:,}",
-                      delta=f"{positive/total*100:.1f}%")
-            m3.metric("No Disease", f"{negative:,}",
-                      delta=f"{negative/total*100:.1f}%")
+                      delta=f"{positive / total * 100:.1f}%")
+            m3.metric("No Disease",             f"{negative:,}",
+                      delta=f"{negative / total * 100:.1f}%")
 
             st.dataframe(out, use_container_width=True)
 
